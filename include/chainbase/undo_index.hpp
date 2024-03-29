@@ -182,7 +182,7 @@ namespace chainbase {
 
    template<typename T, typename Allocator, typename... Indices>
    class undo_index;
-  
+
    template<typename Node, typename OrderedIndex>
    struct set_impl : private set_base<Node, OrderedIndex> {
       using base_type = set_base<Node, OrderedIndex>;
@@ -252,7 +252,7 @@ namespace chainbase {
          if( sizeof(node) != _size_of_value_type || sizeof(*this) != _size_of_this )
             BOOST_THROW_EXCEPTION( std::runtime_error("content of memory does not match data expected by executable") );
       }
-    
+
       struct node : hook<Indices, Allocator>..., value_holder<T> {
          using value_type = T;
          using allocator_type = Allocator;
@@ -345,13 +345,18 @@ namespace chainbase {
          auto constructor = [&]( value_type& v ) {
             v.id = new_id;
             c( v );
+            new_id = v.id;
          };
+         if (new_id < _next_id)
+            BOOST_THROW_EXCEPTION( std::logic_error{ "new id can not be less than next id" } );
          alloc_traits::construct(_allocator, &*p, constructor, propagate_allocator(_allocator));
          auto guard1 = scope_exit{[&]{ alloc_traits::destroy(_allocator, &*p); }};
          if(!insert_impl<1>(p->_item))
             BOOST_THROW_EXCEPTION( std::logic_error{ "could not insert object, most likely a uniqueness constraint was violated" } );
          std::get<0>(_indices).push_back(p->_item); // cannot fail and we know that it will definitely insert at the end.
          on_create(p->_item);
+         if (new_id > _next_id)
+            _next_id = new_id;
          ++_next_id;
          guard1.cancel();
          guard0.cancel();
